@@ -1,0 +1,393 @@
+import SolitaireCard from './SolitaireCard.js';
+import CardBonus from './CardBonus.js';
+import Server from "./Server";
+
+class SolitaireHolder extends Phaser.GameObjects.Container {
+    constructor(config){
+        super(config.scene, config.x, config.y, [] );
+        config.scene.add.existing(this);
+        this.config = config;
+        this.setSize(SolitaireCard.prototype.CARD_WIDTH, SolitaireCard.prototype.CARD_HEIGHT);
+        this._active = false;
+
+
+        this.cards = [];
+        this.holderName = config.holderName;
+        this._isBoardHolder = this.holderName.includes(SolitaireHolder.prototype.boardHolder);
+        if (this._isBoardHolder)
+            this.boardOrder = config.boardOrder;
+        this.setData('holderName', config.holderName);
+        this.setName(this.holderName);
+        this.dependency = config.dependency;
+        this.setWeb(config.web);
+        this.bonus = config.bonus;
+
+        this.btn = new Phaser.GameObjects.Rectangle(config.scene,0,0,SolitaireCard.prototype.CARD_WIDTH, SolitaireCard.prototype.CARD_HEIGHT, 0xff0000, 0.0 );
+        this.add(this.btn);
+
+        this.btn.setInteractive();
+        this.btn.on('pointerdown', () => {  this.onClicked(); });
+
+        this.disabler = new Phaser.GameObjects.Rectangle(config.scene, 0,0,SolitaireCard.prototype.CARD_WIDTH, SolitaireCard.prototype.CARD_HEIGHT, 0x000000, 0.4 );
+        this.add(this.disabler);
+
+        if (this._isBoardHolder){
+            var boardHolderNo = new Phaser.GameObjects.Text(config.scene, 0,0, this.holderName.split('-')[1], {});
+            boardHolderNo.setStyle({
+                fontSize: '64px',
+                fontFamily: 'Arial',
+                color: '#aaaaff',
+                align: 'center'
+            });
+            boardHolderNo.setOrigin(-0.05,-0.25);
+            this.add(boardHolderNo);
+
+            if (this.bonus!=""){
+                var bonusConfig = {
+                    scene: this.config.scene,
+                    bonusType: this.bonus
+                }
+                var cardBonus = new CardBonus(bonusConfig);
+                this.cardBonus = cardBonus;
+                this.add(this.cardBonus);
+                this.cardBonus.visible = false;
+            }
+        }
+    }
+
+    get BoardOrder(){
+        return this.boardOrder;
+    }
+
+    hasBonus(){
+        return this.bonus && this.bonus != "";
+    }
+
+    set_Active(val){
+         // console.log(' I am '+this.holderName+' and just set _active to '+val);
+        this._active = val;
+
+        if (this.isBoardHolder()){
+            if (this._active){
+                 this.disabler.setVisible(false);
+                if (this.topCard.faceDown)
+                    this.topCard.setFaceDown(false);
+            } else {
+                this.disabler.setVisible(this.topCard!=null);
+
+            }
+            if (this.hasBonus())
+                this.cardBonus.visible = this._active;
+
+            this.Interactive = val;
+        }
+    }
+
+    is_Active(){
+        return this._active;
+    }
+
+    setWeb(_web){
+        this.web = _web;
+        if (this.web){
+            // console.log(this.holderName +' has web? :'+this.web);
+            this.webImage =  new Phaser.GameObjects.Image(this.config.scene, 0, 0, 'common', 'spiderWeb');
+            this.webImage.setScale(1.5, 1.5);
+            this.add(this.webImage);
+        } else {
+            if (this.webImage)
+                this.webImage.setVisible(false);
+        }
+    }
+
+    hasWeb(){
+        return this.web;
+    }
+
+    onClicked(){
+        console.log('ho ho ho I am '+  this.holderName + ' and I am '+(this._active ? '' : ' NOT ')+ ' active.');
+
+        console.log(' is Moving? :'+this.config.scene.IsMoving);
+        console.log(' is PendingResponse? : '+this.config.scene.IsPendingResponse);
+        console.log(' is TopCard null ?' + (this.topCard == null));
+        // console.log(' is TopCard Frozen?' + this.topCard.Frozen);
+        // if (this.topCard == null) return;
+
+        if( this.config.scene.IsMoving || this.config.scene.IsPendingResponse || (this.topCard!=null && this.topCard.Frozen))
+            return;
+
+        console.log('not Moving, not PendingResponse, topCard OK');
+
+        if(!this.is_Active)
+        {
+            if(this.config.scene.hasMagicWand)
+                ZSolitaire.instance.controls.illegalWandUse();
+            else
+                this.showAnimation(SolitaireHolder.prototype.BLOCKED_ANIMATION);
+            return;
+        }
+
+        console.log(' it is Active, OK');
+
+        if((this.holderName == SolitaireHolder.prototype.deckHolder || this.holderName == SolitaireHolder.prototype.mainHolder) && this.config.scene.Controls.isTransferAllowed(SolitaireHolder.prototype.deckHolder, SolitaireHolder.prototype.mainHolder))
+        {
+            console.log(' transfer is Allowed, lets do it');
+            this.config.scene.IsPendingResponse = true;
+           this.transferResponse(this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_TRANSFER_CARD, {from: SolitaireHolder.prototype.deckHolder, to: SolitaireHolder.prototype.mainHolder}));
+            this.Interactive = false;
+
+            this.config.scene.Controls.transferCard({from: SolitaireHolder.prototype.deckHolder, to: SolitaireHolder.prototype.mainHolder});
+        }
+        else if (this.holderName == SolitaireHolder.prototype.jokerHolder &&  this.config.scene.Controls.isTransferAllowed(SolitaireHolder.prototype.jokerHolder, SolitaireHolder.prototype.mainHolder)) {
+
+            console.log(' transfer is Allowed, lets do it');
+            this.config.scene.IsPendingResponse = true;
+            this.transferResponse(this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_TRANSFER_CARD, {from: SolitaireHolder.prototype.jokerHolder,  to: SolitaireHolder.prototype.mainHolder }));
+            this.Interactive = false;
+
+            this.config.scene.Controls.transferCard({from: SolitaireHolder.prototype.jokerHolder, to: SolitaireHolder.prototype.mainHolder});
+        } else if (this.holderName == SolitaireHolder.prototype.primarySaveHolder) {
+           console.log(" Just clicked on Primary Save Holder");
+
+            if (this.cards.length == 0 && this.config.scene.Controls.isTransferAllowed(SolitaireHolder.prototype.mainHolder, SolitaireHolder.prototype.primarySaveHolder)) {
+                console.log(' transfer is Allowed, lets do it');
+                this.config.scene.IsPendingResponse = true;
+                this.transferResponse(this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_TRANSFER_CARD, {
+                    from: SolitaireHolder.prototype.mainHolder,
+                    to: SolitaireHolder.prototype.primarySaveHolder
+                }));
+                this.Interactive = false;
+                this.config.scene.Controls.transferCard({
+                    from: SolitaireHolder.prototype.mainHolder,
+                    to: SolitaireHolder.prototype.primarySaveHolder
+                });
+
+            } else if (this.config.scene.Controls.mainHolder.cards.length == 1) {
+                console.log("only 1 card in main holder. cant do it");
+                this.config.scene.Controls.mainHolder.showAnimation(SolitaireHolder.prototype.SINGLE_CARD_ANIMATION);
+            } else if (this.cards.length > 0 && this.config.scene.Controls.isTransferAllowed(SolitaireHolder.prototype.primarySaveHolder, SolitaireHolder.prototype.mainHolder)) {
+                this.config.scene.IsPendingResponse = true;
+                this.transferResponse(this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_TRANSFER_CARD, {
+                    from: SolitaireHolder.prototype.primarySaveHolder,
+                    to: SolitaireHolder.prototype.mainHolder
+                }));
+                this.Interactive = false;
+                this.config.scene.Controls.transferCard({
+                    from: SolitaireHolder.prototype.primarySaveHolder,
+                    to: SolitaireHolder.prototype.mainHolder
+                });
+            }
+        } else if (this.holderName == SolitaireHolder.prototype.secondarySaveHolder) {
+            console.log(" Just clicked on Secondary Save Holder");
+
+            if (this.cards.length == 0 && this.config.scene.Controls.isTransferAllowed(SolitaireHolder.prototype.mainHolder, SolitaireHolder.prototype.secondarySaveHolder)) {
+                console.log(' transfer is Allowed, lets do it');
+                this.config.scene.IsPendingResponse = true;
+                this.transferResponse(this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_TRANSFER_CARD, {
+                    from: SolitaireHolder.prototype.mainHolder,
+                    to: SolitaireHolder.prototype.secondarySaveHolder
+                }));
+                this.Interactive = false;
+                this.config.scene.Controls.transferCard({
+                    from: SolitaireHolder.prototype.mainHolder,
+                    to: SolitaireHolder.prototype.secondarySaveHolder
+                });
+
+            } else if (this.config.scene.Controls.mainHolder.cards.length == 1) {
+                console.log("only 1 card in main holder. cant do it");
+                this.config.scene.Controls.mainHolder.showAnimation(SolitaireHolder.prototype.SINGLE_CARD_ANIMATION);
+            } else if (this.cards.length > 0 && this.config.scene.Controls.isTransferAllowed(SolitaireHolder.prototype.secondarySaveHolder, SolitaireHolder.prototype.mainHolder)) {
+                this.config.scene.IsPendingResponse = true;
+                this.transferResponse(this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_TRANSFER_CARD, {
+                    from: SolitaireHolder.prototype.secondarySaveHolder,
+                    to: SolitaireHolder.prototype.mainHolder
+                }));
+                this.Interactive = false;
+                this.config.scene.Controls.transferCard({
+                    from: SolitaireHolder.prototype.secondarySaveHolder,
+                    to: SolitaireHolder.prototype.mainHolder
+                });
+            }
+        } else if( this._isBoardHolder) {
+            if(this.config.scene.Controls.HasMagicWand)
+            {
+                this.config.scene.Controls.HasMagicWand(false);
+                //todo
+                // ZSolitaire.gameCommand(ZSolitaire.COMMAND_USE_MAGIC_WAND, {slot: _holder}, new Responder(onMagicWandUse));
+                // this.removeEventListener(TouchEvent.TOUCH, onTouch);
+                // ZSolitaire.instance.controls.isPendingResponse = true;
+                //
+                // ZSolitaire.instance.controls.useMagicWand({slot: _holder});
+            }
+            else if(this.config.scene.Controls.isTransferAllowed(this.holderName, SolitaireHolder.prototype.mainHolder))
+            {
+                if(this.web)
+                {
+                    this.config.scene.IsPendingResponse = true;
+                    this.Interactive = false;
+                    this.webRemoveResponse(this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_REMOVE_WEB, {
+                        from: this.holderName
+                    }));
+                } else {
+                    this.config.scene.IsPendingResponse = true;
+                    this.transferResponse(this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_TRANSFER_CARD, {
+                        from: this.holderName,
+                        to: SolitaireHolder.prototype.mainHolder
+                    }));
+
+                    this.Interactive = false;
+                    this.config.scene.Controls.transferCard({
+                        from: this.holderName,
+                        to: SolitaireHolder.prototype.mainHolder
+                    });
+                }
+            }
+            else
+            {
+                this.showAnimation(SolitaireHolder.prototype.INVALID_ANIMATION);
+                this.config.scene.Controls.mainHolder.showAnimation(SolitaireHolder.prototype.INVALID_ANIMATION);
+            }
+        }
+    }
+
+    transferResponse(res){
+        if (res == null){
+            console.log("SolitaireHolder: card_transfer_false");
+        }
+
+        if (res && !res.success){
+            console.log('SolitaireHolder: unsuccesful card transfer.Duhhh');
+            this.recoverFromFault(res);
+            return;
+        }
+
+        console.log('SolitaireHolder: Succesful card transfer. Yup.')
+        this.Interactive = true;
+        this.config.scene.IsPendingResponse = false;
+    }
+
+    webRemoveResponse(res){
+        console.log("Solitaire Holder, webRemoveResponse res = "+res.success);
+        if (res.success)
+            this.config.scene.Controls.removeWeb(res);
+        this.Interactive = true;
+        this.config.scene.IsPendingResponse = false;
+    }
+
+    recoverFromFault(res){
+        this.config.scene.Board.Init(res.board.slots, false);
+        this.config.scene.Controls.resetHoldersForFault(res.board);
+        this.Interactive = true;
+        this.config.scene.IsPendingResponse = false;
+    }
+
+   resetHolder(cards = null){
+        this.clearCards();
+
+        if(cards)
+            for(var i = 0; i<cards.length; i++)
+            {
+                var cardConfig = {
+                    scene: this.config.scene,
+                    x: 0,
+                    y: 0,
+                    cardVal : cards[i],
+                    faceDown : this.holderName == SolitaireHolder.prototype.deckHolder
+                }
+
+                var card = new SolitaireCard(cardConfig);
+                this.cards.push(card);
+                this.addCard(card);
+            }
+
+       this._active = true;
+    }
+
+    showAnimation(animationType){
+        console.log('Playing animation');
+    }
+
+    addCard(card){
+        // card.parentContainer = null;
+        this.cards.push(card);
+        this.topCard = card;
+        card.x = 0;
+        card.y = 0;
+        this.add(card);
+
+        if (this.isBoardHolder())
+            this.sendToBack(card);
+
+        this.cardsNum = this.cards.length;
+
+        this.setVisible(true);
+        this.config.scene.Controls.updateControls();
+
+        // console.log(this.list.length);
+        // console.log(this.list[0].parentContainer.name);
+    }
+
+    removeCard(destroy=false){
+        var acard = this.cards.pop();
+        this.remove(acard, destroy);
+        if (this.cards.length > 0){
+            this.topCard = this.cards[this.cards.length-1];
+        } else {
+            this.setVisible(false);
+            this.topCard = null;
+        }
+
+        this.cardsNum = this.cards.length;
+
+        //todo
+        this.config.scene.Controls.updateControls();
+
+        return acard;
+    }
+
+    clearCards(){
+        this.removeAll(true);
+        this.cards = [];
+        this.cardsNum = 0;
+    }
+
+    isBoardHolder(){
+        return this._isBoardHolder;
+    }
+
+    getDependency(){
+        return this.dependency;
+    }
+
+    getCardsNum(){
+        return this.cards.length;
+    }
+
+    getTopCard(){
+       return this.topCard;
+    }
+
+    getHolderPosition(){
+        return {_x: this.config.x, _y: this.config.y }
+    }
+
+    set Interactive(val){
+       this.btn.setInteractive(val);
+    }
+
+}
+
+export default SolitaireHolder;
+
+SolitaireHolder.prototype.mainHolder =  'MAIN_HOLDER';
+SolitaireHolder.prototype.jokerHolder = 'JOKER_HOLDER';
+SolitaireHolder.prototype.primarySaveHolder =  'PRIMARY_SAVE_HOLDER';
+SolitaireHolder.prototype.secondarySaveHolder =  'SECONDARY_SAVE_HOLDER';
+SolitaireHolder.prototype.boardHolder = 'BOARD_HOLDER';
+SolitaireHolder.prototype.deckHolder = 'DECK_HOLDER';
+
+SolitaireHolder.prototype.INVALID_ANIMATION = "invalid";
+SolitaireHolder.prototype.BLOCKED_ANIMATION = "blocked";
+SolitaireHolder.prototype.MISSED_ANIMATION = "missed";
+SolitaireHolder.prototype.SINGLE_CARD_ANIMATION = "singleCard";
+
