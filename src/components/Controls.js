@@ -58,6 +58,26 @@ class Controls extends Phaser.GameObjects.Container {
         timeBarMask.setVisible(false);
         gameTimeBar.mask = mask;
 
+        const btnMagicWand = new Phaser.GameObjects.Image(config.scene, 0, 0,'board1', 'btnMagicWand_idle');
+        btnMagicWand.x = 55;
+        btnMagicWand.y = bg.y-150;
+        this.add(btnMagicWand);
+
+        const btnExtraCards = new Phaser.GameObjects.Image(config.scene, 0, 0,'board1', 'btnExtraCards_idle');
+        btnExtraCards.x = 55;
+        btnExtraCards.y = bg.y;
+        this.add(btnExtraCards);
+
+        const btShuffle = new Phaser.GameObjects.Image(config.scene, 0, 0,'board1', 'btnShuffle_idle');
+        btShuffle.x = bg.x + 480;
+        btShuffle.y = bg.y-150;
+        this.add(btShuffle);
+
+        const btnUndo = new Phaser.GameObjects.Image(config.scene, 0, 0,'board1', 'btnUndo_idle');
+        btnUndo.x = bg.x + 480;
+        btnUndo.y = bg.y;
+        this.add(btnUndo);
+
         this.timeBar = timeBarMask;
 
         //------------- add powerups ---------------------
