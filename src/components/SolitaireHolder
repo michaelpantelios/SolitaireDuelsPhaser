@@ -209,15 +209,15 @@ class SolitaireHolder extends Phaser.GameObjects.Container {
                 });
             }
         } else if( this._isBoardHolder) {
-            if(this.config.scene.Controls.HasMagicWand)
+            console.log(" Just clicked on a board Holder");
+            if(this.config.scene.Controls.hasMagicWand)
             {
+                console.log(" Just clicked on a board Holder "+this.holderName+" with MAGIC WAND!");
                 this.config.scene.Controls.HasMagicWand(false);
-                //todo
-                // ZSolitaire.gameCommand(ZSolitaire.COMMAND_USE_MAGIC_WAND, {slot: _holder}, new Responder(onMagicWandUse));
-                // this.removeEventListener(TouchEvent.TOUCH, onTouch);
-                // ZSolitaire.instance.controls.isPendingResponse = true;
-                //
-                // ZSolitaire.instance.controls.useMagicWand({slot: _holder});
+                this.config.scene.IsPendingResponse = true;
+                this.config.scene.Controls.useMagicWand(  this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_USE_MAGIC_WAND, {slot: this.holderName}) );
+
+
             }
             else if(this.config.scene.Controls.isTransferAllowed(this.holderName, SolitaireHolder.prototype.mainHolder))
             {
@@ -374,6 +374,32 @@ class SolitaireHolder extends Phaser.GameObjects.Container {
     set Interactive(val){
        this.btn.setInteractive(val);
     }
+
+    beginShuffle(){
+        if (this.web)
+            this.webImage.visible = false;
+        if (this.bonus!="")
+            this.cardBonus.visible = false;
+    }
+
+    endShuffle()
+    {
+        if (this.web)
+        {
+            this.webImage.visible = true;
+        }
+        if (this.bonus!="")
+            this.cardBonus.visible = true;
+    }
+
+   removeBonus()
+    {
+        this.bonus = "";
+        if ( this.cardBonus != null)
+           this.destroy(this.cardBonus);
+    }
+
+
 
 }
 

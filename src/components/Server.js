@@ -267,7 +267,7 @@ class Server extends EventEmitter {
                     return {success: true};
                 else
                     return {success: false, pos: pos, from: val.from, to: val.to, fromCard: fromCard, toCard: toCard, board: this.state.boards[pos]};
-                break;
+
             case this.GAME_COMMAND_REMOVE_WEB:
                 console.log("((((((((((((((((( SERVER GOT COMMAND: "+cmd+" from pos: "+ pos +" , "+playerId+' )))))))))))))))))))');
                 var bstate = this.state.boards[pos];
@@ -278,7 +278,7 @@ class Server extends EventEmitter {
                     return {success: true, from: val.from, randomCard: removeResult.randomCard };
                 else
                     return {success: false};
-                break;
+
             case this.GAME_COMMAND_AWARD_BONUS:
                 console.log("((((((((((((((((( SERVER GOT COMMAND: "+cmd+" from pos: "+ pos +" , "+playerId+' ,val = '+val.from+' )))))))))))))))))))');
                 var bstate = this.state.boards[pos];
@@ -287,7 +287,59 @@ class Server extends EventEmitter {
                 if (awardResult)
                     return {success: true, data: awardResult.data, bonusType: awardResult.bonus}
                 else return {success : false};
-                break;
+
+            case this.GAME_COMMAND_SHUFFLE:
+                console.log("((((((((((((((((( SERVER GOT COMMAND: "+cmd+" from pos: "+ pos +" , "+playerId+' )))))))))))))))))))');
+                var bstate = this.state.boards[pos];
+
+                bstate.shuffleAttempts = 0;
+
+                if (this.shuffle(bstate))
+                    return {success: true, slots: bstate.slots}
+                else return {success: false};
+
+            case this.GAME_COMMAND_UNDO:
+                console.log("((((((((((((((((( SERVER GOT COMMAND: "+cmd+" from pos: "+ pos +" , "+playerId+' )))))))))))))))))))');
+                var bstate = this.state.boards[pos];
+
+                let undoAction = bstate.undoQueue[bstate.undoQueue.length - 1];
+                let res = this.undo(bstate);
+                console.log("SERVER, undo res = "+res);
+                this.state.players[pos].cardsLeft = bstate.deckHolder.length;
+
+                if (res)
+                {
+                    // if (isScoreMove(state.boards[myPos], undoAction.to, undoAction.from))
+                    // {
+                    //     state.playerStates[myPos].revertScore();
+                    //     state.playerStates[myPos].updateProgress((state.boards[myPos].initialCardsNum - countCardsLeft(state.boards[myPos])) / state.boards[myPos].initialCardsNum);
+                    // }
+
+                    return {success:true};
+                } else return {success : false};
+            case this.GAME_COMMAND_EXTRA_CARDS:
+                console.log("((((((((((((((((( SERVER GOT COMMAND: "+cmd+" from pos: "+ pos +" , "+playerId+' )))))))))))))))))))');
+                var bstate = this.state.boards[pos];
+
+                var extraCardsRes = this.addExtraCards(bstate, Server.extraCardsPowerUp);
+                console.log("extraCardsRes = "+extraCardsRes);
+                this.state.players[pos].cardsLeft = bstate.deckHolder.length;
+
+                if (extraCardsRes.length > 0)
+                    return {success: true, extraCards: extraCardsRes};
+                else return {success: false };
+            case this.GAME_COMMAND_BUY_MAGIC_WAND:
+                console.log("((((((((((((((((( SERVER GOT COMMAND: "+cmd+" from pos: "+ pos +" , "+playerId+' )))))))))))))))))))');
+                return {success: true};
+            case this.GAME_COMMAND_USE_MAGIC_WAND:
+                console.log("((((((((((((((((( SERVER GOT COMMAND: "+cmd+" from pos: "+ pos +" , "+playerId+', val[0]: '+val.slot + ' )))))))))))))))))))');
+                var magicHolder = val.slot;
+                var bstate = this.state.boards[pos];
+
+                var magicWandRes = this.magicWand(bstate, magicHolder);
+                if (magicWandRes)
+                    return {success : true, magicHolder: magicHolder}
+                else return {success : false};
         }
     }
 
@@ -506,18 +558,68 @@ class Server extends EventEmitter {
     }
 
     magicWand(board, slotName) {
+        var slotData = slotName.split("-");
 
+        if (slotData[0] == Server.boardHolder)
+        {
+            console.log("magicWand we have a boardHolder");
+            var slot = board.slots[parseInt(slotData[1])];
+
+
+            if (slot != null)
+            {
+
+                slot.card = 0;
+
+                board.undoQueue = [];
+
+                return true;
+            }
+        }
+
+        return false;
     }
 
    shuffle(board) {
+       board.shuffleAttempts++;
+       var oldCards = []
+       for (var i = 0; i < board.slots.length; i++)
+           if (board.slots[i] != null && board.slots[i].card!=0 && !board.slots[i].faceDown)
+               oldCards.push(board.slots[i].card);
 
+       var changed = false;
+       for (var j = 0; j < board.slots.length; j++)
+       if (board.slots[j]!=null && board.slots[j].card!=0 && !board.slots[j].faceDown)
+       {
+           var index = Math.floor(Math.random() * oldCards.length);
+           if (board.slots[j].card != oldCards[index])
+               changed = true;
+           board.slots[j].card = oldCards[index];
+           oldCards.splice(index, 1);
+       }
+
+       board.undoQueue = [];
+
+       if (!changed && board.shuffleAttempts < 30)
+           this.shuffle(board);
+
+       return changed;
     }
 
-   extraJoker() { }
-   unlockHolder() { }
+    extraJoker() { }
+
+    unlockHolder() { }
 
     undo(board) {
+        if (board.undoQueue.length > 0)
+        {
+            let action = board.undoQueue[board.undoQueue.length - 1];
+            let undoResult = this.doTransferCard(board, action.from, action.to, true);
 
+            return undoResult;
+        }
+
+        return false;
     }
 
     finishGame()
@@ -717,6 +819,7 @@ Server.deckHolder = 'DECK_HOLDER';
 Server.baseScore = 10;
 Server.multiplierScore = 5;
 Server.emptyBoardScore = 100;
+Server.extraCardsPowerUp = 5;
 
 
 Server.BONUS_EXTRA_CARDS = "ExtraCards";

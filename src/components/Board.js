@@ -146,6 +146,38 @@ class Board extends Phaser.GameObjects.Container {
                 this.holders[cards[a]].topCard.setFaceDown(false);
         }
     }
+
+    shuffle(slots){
+        var cards =[];
+        var affectedSlots =[];
+
+        for (var i = 0; i < this.holders.length; i++)
+        if (this.holders[i].topCard != null && !this.holders[i].topCard.faceDown)
+        {
+            let sCard = this.holders[i].removeCard();
+            this.holders[i].beginShuffle();
+            cards.push(sCard);
+            affectedSlots.push(i);
+        }
+
+        for (var j = 0; j < affectedSlots.length; j++)
+        if (this.holders[affectedSlots[j]].cardsNum == 0)
+        {
+            let destinationHolder = this.holders[affectedSlots[j]];
+            let newCard = slots[affectedSlots[j]].card;
+
+            for (var k = 0; k < cards.length; k++)
+            if (cards[k].cardVal == newCard)
+            {
+                let c = cards[k];
+                cards.splice(k,1);
+                destinationHolder.addCard(c);
+                destinationHolder.endShuffle();
+                break;
+            }
+        }
+        this.config.scene.IsPendingResponse = false;
+    }
 }
 
 export default Board;

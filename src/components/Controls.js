@@ -13,7 +13,9 @@ class Controls extends Phaser.GameObjects.Container {
         this.remainingTime = 0;
         this.cardsLeft = 0;
 
-        this._undoQueue = [];
+        this.undoQueue = [];
+
+        this.hasMagicWand = false;
 
         this.isMoving = false;
 
@@ -62,27 +64,33 @@ class Controls extends Phaser.GameObjects.Container {
         btnMagicWand.x = 55;
         btnMagicWand.y = bg.y-150;
         this.add(btnMagicWand);
+        btnMagicWand.setInteractive();
+        btnMagicWand.on('pointerdown', () => {  this.onMagicWandClicked(); });
 
         const btnExtraCards = new Phaser.GameObjects.Image(config.scene, 0, 0,'board1', 'btnExtraCards_idle');
         btnExtraCards.x = 55;
         btnExtraCards.y = bg.y;
         this.add(btnExtraCards);
+        btnExtraCards.setInteractive();
+        btnExtraCards.on('pointerdown', () => {  this.onExtraCardsClicked(); });
 
-        const btShuffle = new Phaser.GameObjects.Image(config.scene, 0, 0,'board1', 'btnShuffle_idle');
-        btShuffle.x = bg.x + 480;
-        btShuffle.y = bg.y-150;
-        this.add(btShuffle);
+        let btnShuffle = new Phaser.GameObjects.Image(config.scene, 0, 0,'board1', 'btnShuffle_idle');
+        btnShuffle.x = bg.x + 480;
+        btnShuffle.y = bg.y-150;
+        this.add(btnShuffle);
+        btnShuffle.setInteractive();
+        btnShuffle.on('pointerdown', () => {  this.onShuffleClicked(); });
 
         const btnUndo = new Phaser.GameObjects.Image(config.scene, 0, 0,'board1', 'btnUndo_idle');
         btnUndo.x = bg.x + 480;
         btnUndo.y = bg.y;
         this.add(btnUndo);
+        btnUndo.setInteractive();
+        btnUndo.on('pointerdown', () => {  this.onUndoClicked(); });
 
         this.timeBar = timeBarMask;
 
         //------------- add powerups ---------------------
-
-
     }
 
     Init(boardData, levelTime){
@@ -223,12 +231,21 @@ class Controls extends Phaser.GameObjects.Container {
         this.isMoving = val;
     }
 
-    get HasMagicWand(){
-        return  this.hasMagicWand;
+   HasMagicWand(val){
+        this.hasMagicWand = val;
+
+       if (this.hasMagicWand && this.magicWand==null)
+           this.createWand();
+
+       if (!this.hasMagicWand && this.magicWand != null)
+       {
+           this.destroy(this.magicWand);
+       }
     }
 
-    set HasMagicWand(val){
-        this.hasMagicWand = val;
+    createWand()    {
+        this.magicWand = new Phaser.GameObjects.Image(this.config.scene, 0, 0,'board1', 'wand');;
+        this.add(this.magicWand);
     }
 
     isTransferAllowed(from, to){
@@ -276,7 +293,7 @@ class Controls extends Phaser.GameObjects.Container {
     }
 
     doTransferCard(from, to, isUndo = false){
-        console.log('doTransferCard');
+        console.log('Controls: doTransferCard, from: '+from + ", to: "+to+", isUndo: "+isUndo);
         var fromHolder = {};
         var toHolder = {};
 
@@ -324,7 +341,7 @@ class Controls extends Phaser.GameObjects.Container {
                 break;
         }
 
-        var card = fromHolder.removeCard();
+        let card = fromHolder.removeCard();
         this.add(card);
         // card.parentContainer = this;
         var cardPos = fromHolder.getHolderPosition();
@@ -403,13 +420,26 @@ class Controls extends Phaser.GameObjects.Container {
            x : cardDest._x,
            y : cardDest._y,
            duration : SolitaireCard.turnDuration,
-            onComplete : ()=> {onCardFlyComplete(this);}
+            onComplete : ()=> {onCardFlyComplete(this, from, to);}
         });
 
-        var onCardFlyComplete = function(controlsObj){
+        var onCardFlyComplete = function(controlsObj, from, to){
             console.log('onCardFlyComplete');
             toHolder.addCard(card);
             controlsObj.config.scene.Board.updateSelectableHolders();
+
+            console.log("isUndo? :"+isUndo);
+            console.log("controlsObj.undoQueue.length = " + controlsObj.undoQueue.length);
+
+
+            if (!isUndo)
+            {
+                if (controlsObj.undoQueue.length > 0)
+                    controlsObj.undoQueue.splice(controlsObj.undoQueue.length - 1, 1);
+                console.log("from: "+from+", to : "+to);
+                controlsObj.undoQueue.push({ from : to, to : from});
+            }
+
             controlsObj.IsMoving = false;
         }
 
@@ -482,7 +512,7 @@ class Controls extends Phaser.GameObjects.Container {
                 x: 0,
                 y: 0,
                 cardVal : extraCards[i],
-                faceDown : false
+                faceDown : true
             }
 
             var eCard = new SolitaireCard(extraCardConfig);
@@ -491,11 +521,93 @@ class Controls extends Phaser.GameObjects.Container {
         this.updateControls();
         console.log("--------- addExtraCards, deckHolder.length: AFTER:  "+this.deckHolder.length);
 
+    }
+
+    onShuffleClicked(){
+        console.log("LETS SHUFFLE!");
+        this.config.scene.IsPendingResponse = true;
+        let res = this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_SHUFFLE);
+       if (res.success)
+            this.config.scene.Board.shuffle(res.slots);
+       else {
+           console.log("Controls shuffle error ! ");
+           this.config.scene.IsPendingResponse = false;
+       }
+    }
+
+    onMagicWandClicked(){
+        console.log("LET'S BUY MAGIC WAND!");
+
+        if (!this.hasMagicWand)
+        {
+          var buyMagicWandRes = this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_BUY_MAGIC_WAND);
+          if (buyMagicWandRes.success)
+              this.HasMagicWand(true);
+        } else console.log("Controls buy magic Wand error ! ");
 
     }
 
+    useMagicWand(res) {
+        console.log("LET'S USE MAGIC WAND!");
+        this.config.scene.IsPendingResponse = false;
+        if (res.success) {
+            this.clearUndoQueue();
+
+            let holder = this.config.scene.Board.getHolder(res.magicHolder);
+
+            this.doUseMagicWand(holder);
+        } else console.log("Magic Wand Use error");
+
+    }
+
+    doUseMagicWand(holder) {
+        if (holder.hasWeb())
+            holder.web = false;
+
+        let card = holder.removeCard();
+
+        if (holder.isBoardHolder && holder.bonus!="" && holder.bonus !=null)
+            this.onAwardComplete( this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_AWARD_BONUS, {from: holder.holderName}) );
+
+        this.destroy(card);
+        this.config.scene.Board.updateSelectableHolders();
+
+    }
+
+    onExtraCardsClicked(){
+        this.config.scene.IsPendingResponse = true;
+        let res = this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_EXTRA_CARDS);
+        if (res.success)
+            this.addExtraCards(res.extraCards);
+        else {
+            console.log("Controls extraCards error ! ");
+        }
+        this.config.scene.IsPendingResponse = false;
+    }
+
+    onUndoClicked(){
+        console.log("LETS UNDO!");
+        this.config.scene.IsPendingResponse = true;
+        let res = this.config.scene.gameCommand(Server.prototype.GAME_COMMAND_UNDO);
+        if (res.success)
+            this.undo();
+        else {
+            console.log("Server undo error ! ");
+            this.config.scene.IsPendingResponse = false;
+        }
+    }
+
+    undo(){
+        let undoAction = this.undoQueue[this.undoQueue.length- 1];
+        console.log("undoAction : from : "+undoAction.from + ", to: "+undoAction.to);
+        this.clearUndoQueue();
+
+        this.doTransferCard( undoAction.from, undoAction.to, true);
+        this.config.scene.IsPendingResponse = false;
+    }
+
     clearUndoQueue(){
-        this._undoQueue = [];
+        this.undoQueue = [];
     }
 }
 
